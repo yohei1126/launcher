@@ -4,13 +4,29 @@
 package xsbt.boot
 
 import Pre._
-import java.net.{ MalformedURLException, URL }
+import java.net.{ MalformedURLException, URL, Authenticator, PasswordAuthentication }
+import java.net.Authenticator.RequestorType
 
 object CheckProxy {
   def apply() {
     import ProxyProperties._
     for (pp <- Seq(http, https, ftp))
       setFromEnv(pp)
+    Authenticator.setDefault(new Authenticator() {
+      override protected def getPasswordAuthentication: PasswordAuthentication = {
+        if (getRequestorType() == RequestorType.PROXY) {
+          val prot = getRequestingProtocol().toLowerCase()
+          val host = System.getProperty(prot + ".proxyHost", "")
+          val port = Integer.parseInt(System.getProperty(prot + ".proxyPort", "80"))
+          val user = System.getProperty(prot + ".proxyUser", "")
+          val password = System.getProperty(prot + ".proxyPassword", "")
+          if (getRequestingHost().equalsIgnoreCase(host) && port == getRequestingPort()) {
+            new PasswordAuthentication(user, password.toCharArray())
+          }
+        }
+        null
+      }
+    })
   }
 
   private[this] def setFromEnv(conf: ProxyProperties) {
